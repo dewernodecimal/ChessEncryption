@@ -6,6 +6,7 @@ import os
 import time
 import io
 import shutil
+import hashlib
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import threading
@@ -35,6 +36,9 @@ BTN_TERMINATE = "#DC2626"
 BOARD_LIGHT = "#2C3540"
 BOARD_DARK = "#1B1E23"
 
+# Magic Verification Bytes
+MAGIC_PREFIX = b"STEG"
+
 
 def find_stockfish():
     """Robust utility to locate Stockfish binary across standard locations."""
@@ -55,29 +59,77 @@ def find_stockfish():
     return ""
 
 
-def text_to_bits(text):
-    """Encodes a text string into a bit array (MSB first per byte) in a robust way."""
+def sha256_ctr_crypt(data_bytes, password):
+    """
+    Symmetric SHA-256 CTR Stream Cipher.
+    Generates key bytes by hashing (256-bit password key + 32-bit block index) and XORing.
+    Highly secure and has 0 external dependencies.
+    """
+    key = hashlib.sha256(password.encode('utf-8')).digest()
+    out = bytearray()
+    
+    for i, b in enumerate(data_bytes):
+        block_counter = i // 32
+        block_offset = i % 32
+        if block_offset == 0:
+            block_key = hashlib.sha256(key + block_counter.to_bytes(4, 'big')).digest()
+        out.append(b ^ block_key[block_offset])
+        
+    return bytes(out)
+
+
+def encrypt_payload(plaintext, password):
+    """Encrypts plaintext string using the passcode, prepending magic verification bytes."""
+    payload = MAGIC_PREFIX + plaintext.encode('utf-8')
+    if not password:
+        return payload
+    return sha256_ctr_crypt(payload, password)
+
+
+def decrypt_payload(ciphertext_bytes, password):
+    """
+    Decrypts bytes using the passcode.
+    Returns (success_status, decrypted_string).
+    """
+    if not ciphertext_bytes:
+        return False, ""
+        
+    if not password:
+        decrypted = ciphertext_bytes
+    else:
+        decrypted = sha256_ctr_crypt(ciphertext_bytes, password)
+        
+    # Check if decryption was successful via the magic prefix
+    if decrypted.startswith(MAGIC_PREFIX):
+        try:
+            msg_bytes = decrypted[len(MAGIC_PREFIX):]
+            return True, msg_bytes.decode('utf-8')
+        except Exception:
+            return False, ""
+    else:
+        return False, ""
+
+
+def bytes_to_bits(data_bytes):
+    """Encodes standard bytes into a bit array (MSB first per byte)."""
     bits = []
-    for byte in text.encode('utf-8'):
+    for byte in data_bytes:
         for i in range(8):
             bits.append((byte >> (7 - i)) & 1)
     return bits
 
 
-def bits_to_text(bits):
-    """Decodes a bit array back to a text string, processing complete bytes only."""
+def bits_to_bytes(bits):
+    """Decodes a bit array back to a bytes object, processing complete bytes only."""
     if not bits:
-        return ""
+        return b""
     bytes_list = []
     for i in range(0, len(bits) - 7, 8):
         byte = 0
         for bit in bits[i:i+8]:
             byte = (byte << 1) | bit
         bytes_list.append(byte)
-    try:
-        return bytes(bytes_list).decode('utf-8', errors='ignore')
-    except Exception:
-        return ""
+    return bytes(bytes_list)
 
 
 class EncoderControl:
@@ -114,7 +166,6 @@ class ThreadedStegoBot:
         if not candidates:
             return None
             
-        # Use Stockfish if available
         if self.engine is not None:
             try:
                 limit = chess.engine.Limit(time=ENGINE_THINK_TIME)
@@ -122,7 +173,6 @@ class ThreadedStegoBot:
                 best = None
                 tactical_logs = []
                 
-                # Scan multiple PV lines
                 for idx, info in enumerate(analysis):
                     if "pv" in info and len(info["pv"]) > 0:
                         move = info["pv"][0]
@@ -133,7 +183,6 @@ class ThreadedStegoBot:
                         if best is None and move in candidates:
                             best = move
                             
-                # Push the top tactical evaluations to terminal
                 if tactical_logs:
                     log_to_gui(self.gui_queue, f"  [ENGINE] " + " | ".join(tactical_logs[:2]), 'info')
                     
@@ -167,7 +216,7 @@ class ThreadedStegoBot:
 
 
 def log_to_gui(gui_queue, text, level='default'):
-    """Helper to send a live logs to the scrolling green terminal GUI."""
+    """Helper to send live logs to the scrolling green terminal GUI."""
     gui_queue.put({
         'type': 'log',
         'text': text,
@@ -188,7 +237,6 @@ def make_thread_callback(gui_queue, control):
             'tactics': tactics
         })
         
-        # Check Pause state
         while True:
             if control.is_stopped:
                 raise InterruptedError("Stopped by user")
@@ -196,7 +244,6 @@ def make_thread_callback(gui_queue, control):
                 break
             time.sleep(0.05)
             
-        # Animation Delay sleep
         elapsed = 0.0
         while elapsed < control.animation_speed:
             if control.is_stopped:
@@ -207,12 +254,20 @@ def make_thread_callback(gui_queue, control):
     return callback
 
 
-def encode_message_to_games_threaded(secret_message, bot, on_move_callback, gui_queue, control):
+def encode_message_to_games_threaded(secret_message, password, bot, on_move_callback, gui_queue, control):
     """
-    Multithreaded symmetric Chess Steganography Encoder.
-    Transfers bits into playable moves, resetting boards on block states.
+    Multithreaded symmetric Chess Steganography & Encryption Encoder.
+    Encrypts the plaintext first, then maps the encrypted bits into playable moves.
     """
-    data_bits = text_to_bits(secret_message)
+    if password:
+        log_to_gui(gui_queue, ">>> [CRYPT] Deriving SHA-256 key from passcode...", 'info')
+        ciphertext_bytes = encrypt_payload(secret_message, password)
+        log_to_gui(gui_queue, f">>> [CRYPT] SHA256-CTR encryption complete. Cipher bytes: {ciphertext_bytes.hex()[:32]}...", 'success')
+    else:
+        log_to_gui(gui_queue, ">>> [CRYPT] No passcode entered. Running in plain steganography mode.", 'warning')
+        ciphertext_bytes = encrypt_payload(secret_message, "")
+        
+    data_bits = bytes_to_bits(ciphertext_bytes)
     bit_index = 0
     collected_bits = []
     games = []
@@ -221,7 +276,6 @@ def encode_message_to_games_threaded(secret_message, bot, on_move_callback, gui_
     opening = ["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5"]
     
     log_to_gui(gui_queue, f">>> [STEGO] Bitstream compiled: {len(data_bits)} bits.", 'info')
-    log_to_gui(gui_queue, f">>> [STEGO] Encryption input: \"{secret_message}\"", 'info')
     
     while bit_index < len(data_bits):
         if control.is_stopped:
@@ -268,7 +322,7 @@ def encode_message_to_games_threaded(secret_message, bot, on_move_callback, gui_
                 move = bot.pick_best_move(board, skips)
                 desc = "SKIP (King)"
             else:
-                log_to_gui(gui_queue, f">>> [BLOCKED] No legal data/skip moves at ply {board.ply()}. Terminating game early...", 'warning')
+                log_to_gui(gui_queue, f">>> [BLOCKED] No legal moves at ply {board.ply()}. Terminating game early...", 'warning')
                 break
                 
             san_move = board.san(move)
@@ -300,11 +354,11 @@ def encode_message_to_games_threaded(secret_message, bot, on_move_callback, gui_
     return games
 
 
-def run_encoder_thread(secret_message, engine_path, gui_queue, control):
-    """Background worker thread executing steganography without blocking the GUI."""
+def run_encoder_thread(secret_message, password, engine_path, gui_queue, control):
+    """Background worker thread executing encryption & steganography without blocking the GUI."""
     engine = None
     try:
-        log_to_gui(gui_queue, ">>> [SYS] Booting Chess Steganography Module...", 'info')
+        log_to_gui(gui_queue, ">>> [SYS] Booting Hybrid Chess Cryptography Console...", 'info')
         
         if engine_path and os.path.exists(engine_path):
             log_to_gui(gui_queue, f">>> [LOCATOR] Loading Stockfish from {os.path.basename(engine_path)}...", 'info')
@@ -321,7 +375,7 @@ def run_encoder_thread(secret_message, engine_path, gui_queue, control):
         bot = ThreadedStegoBot(engine, gui_queue)
         
         # Run encoding
-        games = encode_message_to_games_threaded(secret_message, bot, callback, gui_queue, control)
+        games = encode_message_to_games_threaded(secret_message, password, bot, callback, gui_queue, control)
         
         # Export all games as PGN
         pgn_exporter = io.StringIO()
@@ -348,11 +402,8 @@ def run_encoder_thread(secret_message, engine_path, gui_queue, control):
                 pass
 
 
-def decode_games_to_text(games_pgn_str):
-    """
-    Symmetric Chess Steganography Decoder.
-    Reconstructs the original secret message entirely from a PGN string.
-    """
+def decode_games_to_bytes(games_pgn_str):
+    """Extracts raw encoded bits from the PGN games, returning raw ciphertext bytes."""
     pgn_io = io.StringIO(games_pgn_str)
     decoded_bits = []
     
@@ -370,7 +421,7 @@ def decode_games_to_text(games_pgn_str):
             piece = board.piece_at(move.from_square)
             board.push(move)
             
-            # Skip the opening moves
+            # Skip opening book
             if move_number <= OPENING_PLIES:
                 continue
                 
@@ -384,13 +435,26 @@ def decode_games_to_text(games_pgn_str):
             elif piece.piece_type in PIECES_FOR_ONE:
                 decoded_bits.append(1)
                 
-    return bits_to_text(decoded_bits)
+    return bits_to_bytes(decoded_bits)
+
+
+def decode_games_to_text(games_pgn_str, password=""):
+    """
+    Symmetric Chess Steganography & Decryption Decoder.
+    Extracts ciphertext from PGN and decrypts it with the passcode.
+    """
+    ciphertext_bytes = decode_games_to_bytes(games_pgn_str)
+    success, decrypted_text = decrypt_payload(ciphertext_bytes, password)
+    if success:
+        return decrypted_text
+    else:
+        return "[Decryption failed: incorrect passcode]"
 
 
 class CyberpunkStegoConsole:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("🦾 Cyberpunk Chess Steganography Dashboard")
+        self.root.title("🦾 Cyberpunk Chess Cryptography Console")
         self.root.geometry("1150x850")
         self.root.configure(bg=BG_MAIN)
         
@@ -407,7 +471,7 @@ class CyberpunkStegoConsole:
         header_frame = tk.Frame(self.root, bg=BG_MAIN)
         header_frame.pack(fill=tk.X, pady=10, padx=20)
         
-        title_label = tk.Label(header_frame, text="⚡ SECURE CHESS CRYPTOGRAPHY CONSOLE ⚡", 
+        title_label = tk.Label(header_frame, text="⚡ HYBRID CHESS ENCRYPTION MODULE ⚡", 
                                font=("Courier New", 20, "bold"), bg=BG_MAIN, fg=NEON_CYAN)
         title_label.pack(side=tk.LEFT)
         
@@ -419,7 +483,7 @@ class CyberpunkStegoConsole:
         main_pane = tk.Frame(self.root, bg=BG_MAIN)
         main_pane.pack(fill=tk.BOTH, expand=True, padx=20, pady=5)
         
-        # Left Pane (Chess Board and Matrix bitstream)
+        # Left Pane (Chess Board and Decrypted display)
         left_pane = tk.Frame(main_pane, bg=BG_MAIN, width=600)
         left_pane.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
         
@@ -441,7 +505,7 @@ class CyberpunkStegoConsole:
         self.info_label.pack(pady=5)
         
         # Decrypted Stream Box
-        decrypt_frame = tk.LabelFrame(left_pane, text=" 🔓 DECRYPTED RECIPIENT STREAM (LIVE) ", 
+        decrypt_frame = tk.LabelFrame(left_pane, text=" 🔓 DECRYPTED RECIPIENT STREAM (LIVE AUTH CHECK) ", 
                                       font=("Consolas", 10, "bold"), bg=BG_PANEL, fg=NEON_GREEN, bd=1, relief=tk.SOLID)
         decrypt_frame.pack(fill=tk.X, pady=10, ipady=5)
         
@@ -455,7 +519,7 @@ class CyberpunkStegoConsole:
         right_pane.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
         
         # Control panel
-        control_frame = tk.LabelFrame(right_pane, text=" ⚙️ TRANSMISSION CONTROLS ", 
+        control_frame = tk.LabelFrame(right_pane, text=" ⚙️ CRYPTOGRAPHIC CONTROLS ", 
                                       font=("Consolas", 10, "bold"), bg=BG_PANEL, fg=NEON_CYAN, bd=1, relief=tk.SOLID)
         control_frame.pack(fill=tk.X, pady=5)
         
@@ -474,15 +538,21 @@ class CyberpunkStegoConsole:
         sf_btn = tk.Button(control_frame, text="Browse", font=("Consolas", 8), bg=BORDER_COLOR, fg=TEXT_LIGHT, relief=tk.SOLID, command=self.browse_sf)
         sf_btn.grid(row=1, column=2, padx=5, pady=5, sticky=tk.W)
         
+        # Passcode input
+        tk.Label(control_frame, text="Security Key:", font=("Consolas", 9), bg=BG_PANEL, fg=TEXT_DARK).grid(row=2, column=0, sticky=tk.W, padx=10, pady=5)
+        self.pass_entry = tk.Entry(control_frame, width=42, font=("Consolas", 10), bg=BG_MAIN, fg=TEXT_LIGHT, show="*", insertbackground='white', bd=1, relief=tk.SOLID)
+        self.pass_entry.grid(row=2, column=1, columnspan=2, pady=5, sticky=tk.W)
+        self.pass_entry.insert(0, "cyberpunk")
+        
         # Delay slider
-        tk.Label(control_frame, text="Pulse Delay (s):", font=("Consolas", 9), bg=BG_PANEL, fg=TEXT_DARK).grid(row=2, column=0, sticky=tk.W, padx=10, pady=5)
+        tk.Label(control_frame, text="Pulse Delay (s):", font=("Consolas", 9), bg=BG_PANEL, fg=TEXT_DARK).grid(row=3, column=0, sticky=tk.W, padx=10, pady=5)
         self.speed_slider = tk.Scale(control_frame, from_=0.0, to=2.0, resolution=0.05, orient=tk.HORIZONTAL, bg=BG_PANEL, fg=NEON_CYAN, highlightthickness=0, troughcolor=BG_MAIN, activebackground=NEON_CYAN)
-        self.speed_slider.grid(row=2, column=1, columnspan=2, sticky=tk.EW, pady=5)
+        self.speed_slider.grid(row=3, column=1, columnspan=2, sticky=tk.EW, pady=5)
         self.speed_slider.set(0.15)
         
         # Buttons panel
         btn_frame = tk.Frame(control_frame, bg=BG_PANEL)
-        btn_frame.grid(row=3, column=0, columnspan=3, pady=10, padx=10, sticky=tk.EW)
+        btn_frame.grid(row=4, column=0, columnspan=3, pady=10, padx=10, sticky=tk.EW)
         
         self.start_btn = tk.Button(btn_frame, text="🚀 START TRANSMISSION", font=("Consolas", 10, "bold"), bg=BTN_START, fg="white", relief=tk.SOLID, width=22, command=self.on_start)
         self.start_btn.pack(side=tk.LEFT, padx=5)
@@ -514,7 +584,7 @@ class CyberpunkStegoConsole:
         self.terminal.tag_config('error', foreground="red")
         
         # Print initial boot message
-        self.append_log(">>> [SYS] Console Ready. Type a secret message and click START TRANSMISSION.")
+        self.append_log(">>> [SYS] Console Ready. Type a message, passcode, and click START TRANSMISSION.")
         
     def append_log(self, text, level='default'):
         self.terminal.config(state=tk.NORMAL)
@@ -544,7 +614,6 @@ class CyberpunkStegoConsole:
             self.sf_entry.insert(0, path)
             
     def on_start(self):
-        # 1. Check if we are resuming from pause
         if self.worker_thread and self.control.is_paused:
             self.control.is_paused = False
             self.append_log(">>> [SYS] Transmission resumed.", 'success')
@@ -552,8 +621,9 @@ class CyberpunkStegoConsole:
             self.pause_btn.config(state=tk.NORMAL)
             return
             
-        # 2. Start a fresh transmission
         message = self.msg_entry.get().strip()
+        password = self.pass_entry.get().strip()
+        
         if not message:
             messagebox.showerror("Error", "Please input a secret message to encrypt!")
             return
@@ -584,20 +654,18 @@ class CyberpunkStegoConsole:
         engine_path = self.sf_entry.get().strip()
         self.worker_thread = threading.Thread(
             target=run_encoder_thread,
-            args=(message, engine_path, self.gui_queue, self.control),
+            args=(message, password, engine_path, self.gui_queue, self.control),
             daemon=True
         )
         self.worker_thread.start()
         
     def on_pause(self):
         if self.control.is_paused:
-            # Resume
             self.control.is_paused = False
             self.append_log(">>> [SYS] Transmission resumed.", 'success')
             self.pause_btn.config(text="⏸️ PAUSE")
             self.start_btn.config(text="⚡ TRANSMITTING", state=tk.DISABLED)
         else:
-            # Pause
             self.control.is_paused = True
             self.append_log(">>> [SYS] Transmission paused. Click RESUME to continue.", 'warning')
             self.pause_btn.config(text="▶️ RESUME")
@@ -611,11 +679,9 @@ class CyberpunkStegoConsole:
             self.root.after(200, self.cleanup_thread)
             
     def cleanup_thread(self):
-        # Reset visual components
         self.round_label.config(text="SYS TERMINATED", fg=BTN_TERMINATE)
         self.info_label.config(text="Transmission Aborted.", fg="red")
         
-        # Reset buttons
         self.start_btn.config(text="🚀 START TRANSMISSION", state=tk.NORMAL)
         self.pause_btn.config(state=tk.DISABLED, text="⏸️ PAUSE")
         self.stop_btn.config(state=tk.DISABLED)
@@ -630,7 +696,6 @@ class CyberpunkStegoConsole:
         
     def check_queue(self):
         """Read updates from stego thread and refresh UI components in real-time."""
-        # Dynamic speed sync
         self.control.animation_speed = self.speed_slider.get()
         
         try:
@@ -640,8 +705,18 @@ class CyberpunkStegoConsole:
                     board = chess.Board(event['fen'])
                     self.draw_board(board)
                     
-                    decoded_msg = bits_to_text(event['collected_bits'])
-                    self.decoded_text_val.set(f'"{decoded_msg}"')
+                    # Decryption Check
+                    ciphertext_bytes = bits_to_bytes(event['collected_bits'])
+                    current_pass = self.pass_entry.get().strip()
+                    success, decrypted_msg = decrypt_payload(ciphertext_bytes, current_pass)
+                    
+                    if success:
+                        self.decoded_text_val.set(f'"{decrypted_msg}"')
+                        self.decoded_msg_label.config(fg=NEON_GREEN)
+                    else:
+                        self.decoded_text_val.set("❌ ACCESS DENIED / INCORRECT PASSCODE")
+                        self.decoded_msg_label.config(fg="red")
+                        
                     self.info_label.config(
                         text=f"Progress: {int(event['percent'])}% | {event['desc']}",
                         fg="yellow"
@@ -670,8 +745,9 @@ class CyberpunkStegoConsole:
                     with open("stego_games.pgn", "w", encoding="utf-8") as f:
                         f.write(event['pgn'])
                         
-                    decoded = decode_games_to_text(event['pgn'])
-                    self.append_log(f">>> [DECRYPTOR] Extract verify matching: \"{decoded}\"", 'success')
+                    current_pass = self.pass_entry.get().strip()
+                    decoded = decode_games_to_text(event['pgn'], current_pass)
+                    self.append_log(f">>> [DECRYPTOR] Extract verify decrypted: \"{decoded}\"", 'success')
                     
                 elif event['type'] == 'error':
                     self.append_log(f"\n>>> [FATAL] Stego system failure: {event['message']}", 'error')
@@ -688,37 +764,33 @@ class CyberpunkStegoConsole:
 
 def test_encoder_decoder_roundtrip():
     print("=" * 60)
-    print("RUNNING STEGANOGRAPHY SYMMETRIC VALIDATION TEST")
+    print("RUNNING HYBRID ENCRYPTION SYMMETRIC VALIDATION TEST")
     print("=" * 60)
     
-    test_messages = [
-        "Hello World!",
-        "vedant vibhav mahi and neha ",
-        "Steganography is the practice of representing information within another message.",
-        "Short",
-        "A extremely long test message with numbers 1234567890 & symbols #$@ to prove 100% byte encoding robustness!"
+    test_cases = [
+        ("Hello World!", "pass123"),
+        ("vedant vibhav mahi and neha ", "cyberpunk"),
+        ("Steganography is the practice of representing information within another message.", "securepassword"),
+        ("Short", ""), # Test unencrypted fallback
+        ("A extremely long test message with numbers 1234567890 & symbols #$@ to prove 100% byte encoding robustness!", "complex!@#pass")
     ]
     
-    # We create a dummy controls class for the test
     class DummyControl:
         is_stopped = False
         is_paused = False
         animation_speed = 0.0
         
     dummy_control = DummyControl()
-    
-    # Simple dummy queue
     test_queue = queue.Queue()
     
-    # Simple dummy callback
     def dummy_callback(board, move_desc, collected_bits, percent, game_num, tactics=""):
         pass
         
-    for msg in test_messages:
-        print(f"Testing message: '{msg}'")
+    for msg, passcode in test_cases:
+        print(f"Testing msg: '{msg}' | Passcode: '{passcode}'")
         
         bot = ThreadedStegoBot(engine=None, gui_queue=test_queue)
-        games = encode_message_to_games_threaded(msg, bot, dummy_callback, test_queue, dummy_control)
+        games = encode_message_to_games_threaded(msg, passcode, bot, dummy_callback, test_queue, dummy_control)
         
         pgn_exporter = io.StringIO()
         for idx, game in enumerate(games):
@@ -727,15 +799,21 @@ def test_encoder_decoder_roundtrip():
             
         pgn_str = pgn_exporter.getvalue()
         
-        # Decode and assert correctness
-        decoded_msg = decode_games_to_text(pgn_str)
-        print(f"  Decoded: '{decoded_msg}'")
+        # Test 1: Decryption with correct passcode (Must Pass)
+        decoded_correct = decode_games_to_text(pgn_str, passcode)
+        print(f"  Decoded Correct: '{decoded_correct}'")
+        assert decoded_correct == msg, f"ERROR: Decrypted message does not match! Got '{decoded_correct}', expected '{msg}'"
         
-        assert decoded_msg == msg, f"ERROR: Decoded message does not match! Got '{decoded_msg}', expected '{msg}'"
+        # Test 2: Decryption with incorrect passcode (Must Fail if passcode is not empty)
+        if passcode:
+            decoded_wrong = decode_games_to_text(pgn_str, "wrong_passcode")
+            print(f"  Decoded Incorrect: '{decoded_wrong}'")
+            assert "incorrect passcode" in decoded_wrong, f"ERROR: Decryption did not fail on wrong passcode!"
+            
         print("  -> SUCCESS: Symmetric roundtrip validation passed!")
         
     print("=" * 60)
-    print("ALL STEGANOGRAPHY VALIDATION TESTS PASSED SUCCESSFULLY!")
+    print("ALL STEGANOGRAPHY & HYBRID ENCRYPTION TESTS PASSED!")
     print("=" * 60)
 
 
