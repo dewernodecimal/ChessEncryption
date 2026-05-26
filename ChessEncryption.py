@@ -508,10 +508,10 @@ class CyberpunkStegoConsole:
         self.terminal.config(yscrollcommand=term_scrollbar.set)
         
         # Terminal formatting color tags
-        self.terminal.tag_config('info', fg=NEON_CYAN)
-        self.terminal.tag_config('success', fg=NEON_GREEN)
-        self.terminal.tag_config('warning', fg="orange")
-        self.terminal.tag_config('error', fg="red")
+        self.terminal.tag_config('info', foreground=NEON_CYAN)
+        self.terminal.tag_config('success', foreground=NEON_GREEN)
+        self.terminal.tag_config('warning', foreground="orange")
+        self.terminal.tag_config('error', foreground="red")
         
         # Print initial boot message
         self.append_log(">>> [SYS] Console Ready. Type a secret message and click START TRANSMISSION.")
