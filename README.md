@@ -39,7 +39,7 @@ A highly secure and tactically natural steganography protocol that translates te
 ## 💻 Quick Start & Usage
 
 ### 1. Run the Interactive GUI
-Simply run the script to launch the visualizer. It will automatically attempt to find Stockfish, fallback to heuristic mode if needed, and start transmitting a message:
+Simply run the script to launch the visualizer. It will automatically attempt to find Stockfish, fall back to heuristic mode if needed, and start transmitting a message:
 ```bash
 python ChessEncryption.py
 ```
