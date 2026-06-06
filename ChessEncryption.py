@@ -110,7 +110,7 @@ def decrypt_payload(ciphertext_bytes, password):
         return False, ""
 
 
-def bytes_to_bits(data_bytes):
+def bytes_to_bits(data_bytes: bytes) -> list:
     """Encodes standard bytes into a bit array (MSB first per byte)."""
     bits = []
     for byte in data_bytes:
