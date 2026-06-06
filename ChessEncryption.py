@@ -367,7 +367,7 @@ def run_encoder_thread(secret_message, password, engine_path, gui_queue, control
                 engine = chess.engine.SimpleEngine.popen_uci(engine_path)
                 log_to_gui(gui_queue, ">>> [LOCATOR] Stockfish loaded! Multi-PV analysis enabled.", 'success')
             except Exception as e:
-                log_to_gui(gui_queue, f">>> [WARNING] Stockfish loaded failed: {e}", 'warning')
+                log_to_gui(gui_queue, f">>> [WARNING] Stockfish load failed: {e}", 'warning')
                 log_to_gui(gui_queue, ">>> [SYS] Defaulting to local Heuristic Engine.", 'warning')
         else:
             log_to_gui(gui_queue, ">>> [SYS] Stockfish not found. Defaulting to local Heuristic Engine.", 'warning')
@@ -747,7 +747,7 @@ class CyberpunkStegoConsole:
                         
                     current_pass = self.pass_entry.get().strip()
                     decoded = decode_games_to_text(event['pgn'], current_pass)
-                    self.append_log(f">>> [DECRYPTOR] Extract verify decrypted: \"{decoded}\"", 'success')
+                    self.append_log(f">>> [DECRYPTOR] Extracted and verified decrypted: \"{decoded}\"", 'success')
                     
                 elif event['type'] == 'error':
                     self.append_log(f"\n>>> [FATAL] Stego system failure: {event['message']}", 'error')
