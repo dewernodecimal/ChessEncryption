@@ -349,7 +349,8 @@ def encode_message_to_games_threaded(secret_message, password, bot, on_move_call
                 'reason': reason
             })
             game_number += 1
-            time.sleep(1.5)
+            if getattr(control, "animation_speed", 0.1) > 0:
+                time.sleep(1.5)
             
     return games
 
