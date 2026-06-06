@@ -119,7 +119,7 @@ def bytes_to_bits(data_bytes: bytes) -> list:
     return bits
 
 
-def bits_to_bytes(bits):
+def bits_to_bytes(bits: list) -> bytes:
     """Decodes a bit array back to a bytes object, processing complete bytes only."""
     if not bits:
         return b""
