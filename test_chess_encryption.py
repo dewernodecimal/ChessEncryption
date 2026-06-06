@@ -96,5 +96,75 @@ class TestChessEncryption(unittest.TestCase):
         decoded_msg = decode_games_to_text(pgn_str, passcode)
         self.assertEqual(decoded_msg, test_message)
 
+    def test_unicode_messages(self):
+        """Test encoding and decoding of Unicode and Emoji messages."""
+        class DummyControl:
+            is_stopped = False
+            is_paused = False
+            animation_speed = 0.0
+            
+        dummy_control = DummyControl()
+        test_queue = queue.Queue()
+        
+        def dummy_callback(*args, **kwargs):
+            pass
+
+        unicode_message = "♟️ Chess Cryptography ⚡ is cool! 🦾 🔥"
+        passcode = "unicode_key"
+        
+        bot = ThreadedStegoBot(engine=None, gui_queue=test_queue)
+        games = encode_message_to_games_threaded(
+            unicode_message,
+            passcode,
+            bot,
+            dummy_callback,
+            test_queue,
+            dummy_control
+        )
+        
+        pgn_exporter = io.StringIO()
+        for game in games:
+            pgn_exporter.write(str(game))
+            pgn_exporter.write("\n\n")
+        pgn_str = pgn_exporter.getvalue()
+        
+        decoded_msg = decode_games_to_text(pgn_str, passcode)
+        self.assertEqual(decoded_msg, unicode_message)
+
+    def test_empty_message(self):
+        """Test encoding and decoding of an empty message."""
+        class DummyControl:
+            is_stopped = False
+            is_paused = False
+            animation_speed = 0.0
+            
+        dummy_control = DummyControl()
+        test_queue = queue.Queue()
+        
+        def dummy_callback(*args, **kwargs):
+            pass
+
+        empty_message = ""
+        passcode = "empty"
+        
+        bot = ThreadedStegoBot(engine=None, gui_queue=test_queue)
+        games = encode_message_to_games_threaded(
+            empty_message,
+            passcode,
+            bot,
+            dummy_callback,
+            test_queue,
+            dummy_control
+        )
+        
+        pgn_exporter = io.StringIO()
+        for game in games:
+            pgn_exporter.write(str(game))
+            pgn_exporter.write("\n\n")
+        pgn_str = pgn_exporter.getvalue()
+        
+        decoded_msg = decode_games_to_text(pgn_str, passcode)
+        self.assertEqual(decoded_msg, empty_message)
+
 if __name__ == "__main__":
     unittest.main()
