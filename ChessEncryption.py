@@ -773,7 +773,7 @@ def test_encoder_decoder_roundtrip():
         ("vedant vibhav mahi and neha ", "cyberpunk"),
         ("Steganography is the practice of representing information within another message.", "securepassword"),
         ("Short", ""), # Test unencrypted fallback
-        ("A extremely long test message with numbers 1234567890 & symbols #$@ to prove 100% byte encoding robustness!", "complex!@#pass")
+        ("An extremely long test message with numbers 1234567890 & symbols #$@ to prove 100% byte encoding robustness!", "complex!@#pass")
     ]
     
     class DummyControl:
