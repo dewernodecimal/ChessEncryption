@@ -56,6 +56,21 @@ def find_stockfish() -> str:
     if os.path.exists("stockfish.exe"):
         return os.path.abspath("stockfish.exe")
         
+    # Scan standard User Downloads directory dynamically (up to 2 levels deep)
+    try:
+        user_home = os.path.expanduser("~")
+        downloads = os.path.join(user_home, "Downloads")
+        if os.path.exists(downloads):
+            for root, _, files in os.walk(downloads):
+                depth = root.count(os.sep) - downloads.count(os.sep)
+                if depth > 2:
+                    continue
+                for file in files:
+                    if file.lower().startswith("stockfish") and file.lower().endswith(".exe"):
+                        return os.path.join(root, file)
+    except Exception:
+        pass
+        
     return ""
 
 
