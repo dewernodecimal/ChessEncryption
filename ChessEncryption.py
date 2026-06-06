@@ -40,7 +40,7 @@ BOARD_DARK = "#1B1E23"
 MAGIC_PREFIX = b"STEG"
 
 
-def find_stockfish():
+def find_stockfish() -> str:
     """Robust utility to locate Stockfish binary across standard locations."""
     if os.path.exists(STOCKFISH_PATH):
         return STOCKFISH_PATH
@@ -59,7 +59,7 @@ def find_stockfish():
     return ""
 
 
-def sha256_ctr_crypt(data_bytes, password):
+def sha256_ctr_crypt(data_bytes: bytes, password: str) -> bytes:
     """
     Symmetric SHA-256 CTR Stream Cipher.
     Generates key bytes by hashing (256-bit password key + 32-bit block index) and XORing.
@@ -78,7 +78,7 @@ def sha256_ctr_crypt(data_bytes, password):
     return bytes(out)
 
 
-def encrypt_payload(plaintext, password):
+def encrypt_payload(plaintext: str, password: str) -> bytes:
     """Encrypts plaintext string using the passcode, prepending magic verification bytes."""
     payload = MAGIC_PREFIX + plaintext.encode('utf-8')
     if not password:
@@ -86,7 +86,7 @@ def encrypt_payload(plaintext, password):
     return sha256_ctr_crypt(payload, password)
 
 
-def decrypt_payload(ciphertext_bytes, password):
+def decrypt_payload(ciphertext_bytes: bytes, password: str) -> tuple:
     """
     Decrypts bytes using the passcode.
     Returns (success_status, decrypted_string).
