@@ -463,6 +463,7 @@ class CyberpunkStegoConsole:
         
         self.build_ui()
         self.check_queue()
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         
     def build_ui(self):
         # 1. Main Header
@@ -759,6 +760,12 @@ class CyberpunkStegoConsole:
             
         # Schedule check again in 50ms
         self.root.after(50, self.check_queue)
+
+    def on_close(self):
+        """Handle window closure by terminating worker thread if active."""
+        if self.worker_thread and self.worker_thread.is_alive():
+            self.control.is_stopped = True
+        self.root.destroy()
 
 
 def test_encoder_decoder_roundtrip():
