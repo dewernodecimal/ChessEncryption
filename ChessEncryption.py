@@ -446,10 +446,7 @@ def decode_games_to_text(games_pgn_str, password=""):
     """
     ciphertext_bytes = decode_games_to_bytes(games_pgn_str)
     success, decrypted_text = decrypt_payload(ciphertext_bytes, password)
-    if success:
-        return decrypted_text
-    else:
-        return "[Decryption failed: incorrect passcode]"
+    return decrypted_text if success else "[Decryption failed: incorrect passcode]"
 
 
 class CyberpunkStegoConsole:
