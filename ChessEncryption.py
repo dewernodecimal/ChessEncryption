@@ -769,6 +769,7 @@ class CyberpunkStegoConsole:
 
 
 def test_encoder_decoder_roundtrip():
+    """Verify that encrypted payload can be successfully encoded to PGN and decoded back."""
     print("=" * 60)
     print("RUNNING HYBRID ENCRYPTION SYMMETRIC VALIDATION TEST")
     print("=" * 60)
