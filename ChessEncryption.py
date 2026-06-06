@@ -603,6 +603,7 @@ class CyberpunkStegoConsole:
                 self.squares[sq].config(text=" ")
                 
     def browse_sf(self):
+        """Open a file dialog to locate the Stockfish binary executable."""
         path = filedialog.askopenfilename(
             title="Locate Stockfish Executable",
             filetypes=[("Executable Files", "*.exe"), ("All Files", "*.*")]
