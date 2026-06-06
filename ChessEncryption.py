@@ -403,8 +403,16 @@ def run_encoder_thread(secret_message, password, engine_path, gui_queue, control
                 pass
 
 
-def decode_games_to_bytes(games_pgn_str):
-    """Extracts raw encoded bits from the PGN games, returning raw ciphertext bytes."""
+def decode_games_to_bytes(games_pgn_str: str) -> bytes:
+    """
+    Extracts raw encoded bits from the PGN games, returning raw ciphertext bytes.
+    
+    Args:
+        games_pgn_str: The PGN string containing the encoded chess games.
+        
+    Returns:
+        The decrypted ciphertext bytes.
+    """
     pgn_io = io.StringIO(games_pgn_str)
     decoded_bits = []
     
@@ -439,10 +447,17 @@ def decode_games_to_bytes(games_pgn_str):
     return bits_to_bytes(decoded_bits)
 
 
-def decode_games_to_text(games_pgn_str, password=""):
+def decode_games_to_text(games_pgn_str: str, password: str = "") -> str:
     """
     Symmetric Chess Steganography & Decryption Decoder.
     Extracts ciphertext from PGN and decrypts it with the passcode.
+    
+    Args:
+        games_pgn_str: The PGN string containing the encoded chess games.
+        password: The passcode used to decrypt the payload.
+        
+    Returns:
+        The decrypted plaintext message, or an error message if decryption fails.
     """
     ciphertext_bytes = decode_games_to_bytes(games_pgn_str)
     success, decrypted_text = decrypt_payload(ciphertext_bytes, password)
