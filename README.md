@@ -75,3 +75,4 @@ print("Decoded Secret Message:", original_message)
 * **Robust Byte-Shift Encoding**: Replaced custom string conversions with absolute byte-shift operations to support numbers, symbols, spaces, and multi-byte UTF-8 strings.
 * **Game Resets**: If the board reaches a state where neither a target bit move nor a King skip is possible, the game terminates safely, and the bitstream resumes immediately on a fresh board in `GAME #N+1`.
 * **Stockfish Autolocator**: Searches your system's PATH, downloads folders, and standard workspace configurations to find `stockfish.exe` automatically.
+
