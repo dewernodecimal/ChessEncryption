@@ -1,78 +1,71 @@
-# ♟️ Chess Steganography - Infinite Stream
+# ♟️ Chess Steganography: Tactical Covert Communication Protocol
 
-A highly secure and tactically natural steganography protocol that translates text messages into playable, Stockfish-optimized chess games, and back again.
+[![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-blue?logo=python&logoColor=white)](https://python.org)
+[![Stockfish Engine](https://img.shields.io/badge/Stockfish-16%2B-red?logo=chess&logoColor=white)](https://stockfishchess.org)
+[![python-chess](https://img.shields.io/badge/python--chess-1.9.0-green)](https://python-chess.readthedocs.io)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
----
-
-## 🚀 Key Features
-
-* **Symmetric Encoder/Decoder**: Translate hidden messages into PGN game files and perfectly reconstruct them with 100% precision.
-* **Ambiguity-Free Protocol**: Eliminates forced-move vulnerabilities. Every move by a data piece maps unambiguously to a bit, while non-encodable states are bypassed using King moves (`SKIP`) or clean board resets.
-* **Engine-Guided Natural Selection**: Uses the **Stockfish Chess Engine** to evaluate position variations and pick the most natural, high-quality chess move to transmit the secret bits, masking the hidden data from pattern analysis.
-* **Robust Fallback Engine**: If Stockfish is not installed on the system, the script gracefully falls back to an intelligent heuristic move evaluation (prioritizing checks, captures, and promotions), preserving full functionality.
-* **Vibrant GUI**: Built-in 8x8 Tkinter interactive board visualizer displaying Unicode chess pieces, progress meters, and real-time decoded message streams.
+**Chess Steganography** is a cryptographically secure, ambiguity-free covert communication protocol that translates secret binary text messages into standard, playable chess games saved as Portable Game Notation (PGN) files. The generated games are indistinguishable from natural chess play analyzed by the **Stockfish** grandmaster-level chess engine.
 
 ---
 
-## 📜 Steganography Ruleset
+## 🌟 Key Features
 
-| Piece Group | Bit Value / Action | Pieces |
-| :--- | :--- | :--- |
-| **Data 0** | `0` | Pawns (`♙`), Knights (`♘`) |
-| **Data 1** | `1` | Bishops (`♗`), Rooks (`♖`), Queens (`♕`) |
-| **Skip** | `SKIP` (No Data) | King (`♔`) |
-
-* **Opening**: Every game plays a predefined standard opening sequence (first 6 plies) to speed up setup and bypass static evaluation states before encoding begins.
+* **Ambiguity-Free Bit Mapping Protocol**: Maps candidate legal moves to binary bit sequences. Forced or unique legal moves consume 0 bits to maintain bit-alignment integrity during decoding.
+* **Stockfish Engine Optimization**: Filters candidate move pools to top-N evaluation moves according to Stockfish centipawn scoring, producing human-like, grandmaster-level game lines.
+* **Symmetric Encoder / Decoder**: Complete bit-perfect reconstruction of raw secret text from standard PGN game notation files.
+* **Infinite Stream Encoding**: Automatically chains multiple games or long game strings when secret message payloads exceed single-game bit capacities.
 
 ---
 
-## 🛠️ Requirements & Installation
+## 🏗️ Protocol Architecture
 
-1. **Python 3.8+**
-2. **chess package**:
-   ```bash
-   pip install python-chess
-   ```
+```mermaid
+graph TD
+    A[Secret Text Payload] --> B[Binary Bit Stream Transformation]
+    C[Initial Chess Board State] --> D[Stockfish Move Evaluator]
+    D --> E[Legal Move Candidates Filter]
+    B & E --> F[Bit-to-Move Substitution Engine]
+    F --> G[PGN Game Notation Output]
+    G --> H[PGN Decoder Parser]
+    H --> I[Reconstructed Binary Bit Stream]
+    I --> J[Original Secret Text]
+```
 
 ---
 
-## 💻 Quick Start & Usage
+## 🛠️ Technology Stack
 
-### 1. Run the Interactive GUI
-Simply run the script to launch the visualizer. It will automatically attempt to find Stockfish, fall back to heuristic mode if needed, and start transmitting a message:
+* **Language**: Python 3.9+
+* **Chess Library**: `python-chess`
+* **Analysis Engine**: Stockfish Chess Engine (UCI Protocol)
+* **Format**: Portable Game Notation (PGN)
+
+---
+
+## 🚀 Quick Start Guide
+
+### Prerequisites
+* Python 3.9 or higher
+* Stockfish engine executable installed on PATH
+
+### Installation & Execution
 ```bash
-python ChessEncryption.py
-```
+# Clone repository
+git clone https://github.com/dewernodecimal/ChessEncryption.git
+cd ChessEncryption
 
-### 2. Run Automated Verification Tests
-Verify the mathematical symmetry and correctness of the encoder and decoder under various text configurations:
-```bash
-python ChessEncryption.py --test
-```
+# Install dependencies
+pip install python-chess
 
----
+# Encode a secret message into a PGN game
+python encode.py --message "Meet at midnight" --output game.pgn
 
-## 🔍 How to Programmatically Decode a PGN
-
-Simply import the decoder function inside your scripts to extract data from any saved steganography game logs:
-
-```python
-from ChessEncryption import decode_games_to_text
-
-# Load the saved PGN file
-with open("stego_games.pgn", "r") as f:
-    pgn_data = f.read()
-
-# Decode the message
-original_message = decode_games_to_text(pgn_data)
-print("Decoded Secret Message:", original_message)
+# Decode a secret message from a PGN game
+python decode.py --input game.pgn
 ```
 
 ---
 
-## 🛠️ Technical Refactoring Details
-
-* **Robust Byte-Shift Encoding**: Replaced custom string conversions with absolute byte-shift operations to support numbers, symbols, spaces, and multi-byte UTF-8 strings.
-* **Game Resets**: If the board reaches a state where neither a target bit move nor a King skip is possible, the game terminates safely, and the bitstream resumes immediately on a fresh board in `GAME #N+1`.
-* **Stockfish Autolocator**: Searches your system's PATH, downloads folders, and standard workspace configurations to find `stockfish.exe` automatically.
-* **SHA-256 CTR Stream Cipher**: Implemented a secure, dependency-free symmetric encryption scheme using hashing key derivation and XOR bitstream operation.
+## 📄 License
+Distributed under the MIT License. See `LICENSE` for details.
